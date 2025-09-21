@@ -1,0 +1,8 @@
+# file: gitops/overlays/prod/patch-hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: not-used
+spec:
+  minReplicas: 3
+  maxReplicas: 10

@@ -1,0 +1,35 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "required": [
+        "hub",
+        "image",
+        "tag"
+    ],
+    "properties": {
+        "hub": {
+            "type": "string",
+            "minLength": 1
+        },
+        "image": {
+            "type": "string",
+            "minLength": 1
+        },
+        "tag": {
+            "type": "string",
+            "minLength": 1
+        },
+        "prod": {
+            "type": "boolean"
+        },
+        "env": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "string"
+            }
+        },
+        "resources": {
+            "type": "object"
+        }
+    }
+}

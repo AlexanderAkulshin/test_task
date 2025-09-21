@@ -1,0 +1,34 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "internal-service.fullname" . }}-ingress
+  labels:
+    {{- include "internal-service.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "internal-service.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes: ["Ingress","Egress"]
+  ingress:
+    {{- if .Values.networkPolicy.allowIngressFromSameNamespace }}
+    - from:
+        - podSelector: {}    # same namespace
+      ports:
+        - port: {{ .Values.service.port }}
+          protocol: TCP
+    {{- else }}
+    []
+    {{- end }}
+  egress:
+    {{- if .Values.networkPolicy.allowAllEgress }}
+    - {}
+    {{- else }}
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+    {{- end }}
+{{- end }}

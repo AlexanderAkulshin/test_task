@@ -1,0 +1,7 @@
+apiVersion: v2
+name: internal-service
+description: Secure-by-default internal service with HPA and anti-affinity
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.26.0-0"

@@ -1,0 +1,10 @@
+Thank you for installing {{ include "internal-service.fullname" . }}.
+
+To access it locally:
+  1) Port-forward:
+     kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "internal-service.fullname" . }} 8080:{{ .Values.service.port }}
+
+  2) Visit:
+     http://127.0.0.1:8080/
+     http://127.0.0.1:8080/readyz
+     http://127.0.0.1:8080/healthz

@@ -1,0 +1,16 @@
+resources:
+  - ../../base
+namePrefix: dev-
+labels:
+  - includeSelectors: true
+    pairs:
+      env: dev
+patches:
+  - target:
+      kind: Deployment
+      labelSelector: "app.kubernetes.io/name=internal-service"
+    path: patch-deployment.yaml
+  - target:
+      kind: HorizontalPodAutoscaler
+      labelSelector: "app.kubernetes.io/name=internal-service"
+    path: patch-hpa.yaml

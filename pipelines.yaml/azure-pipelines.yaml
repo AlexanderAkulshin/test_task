@@ -1,0 +1,151 @@
+trigger: none
+
+parameters:
+  - name: environment
+    displayName: Target environment
+    type: string
+    default: dev
+    values: [dev, prod]
+
+  - name: imageHub
+    type: string
+    default: ghcr.io/alexanderakulshin
+
+  - name: imageName
+    type: string
+    default: internal-service
+
+  - name: imageTag
+    type: string
+    default: 0.1.0
+
+variables:
+  chartPath: charts/internal-service
+  KubernetesServiceConnection: 'k8s-connection'
+  namespace: $[format('isvc-{0}', parameters.environment)]
+  prodValueBase: 'false'
+  releaseBase: 'isvc'                         
+  serviceNameKustomize: $[format('{0}-isvc-internal-service', parameters.environment)]
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+- stage: Deploy
+  displayName: Deploy internal-service
+  jobs:
+  - job: Deploy
+    displayName: Deploy to ${{ parameters.environment }} (GitOps flow)
+    steps:
+      - checkout: self
+        clean: true
+
+      # Configure kubectl context
+      - task: Kubernetes@1
+        displayName: Set kubectl context
+        inputs:
+          connectionType: 'Kubernetes Service Connection'
+          kubernetesServiceEndpoint: '$(KubernetesServiceConnection)'
+          namespace: '$(namespace)'
+          command: 'login'
+
+      # Install Helm
+      - task: HelmInstaller@1
+        displayName: Install Helm 3
+        inputs:
+          helmVersionToInstall: '3.14.4'
+
+      # Install kubeconform & kustomize
+      - bash: |
+          set -euo pipefail
+          echo "Installing kubeconform..."
+          KUBECONFORM_VERSION="0.6.7"
+          curl -sSLf -o kubeconform.tar.gz "https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          sudo tar -xzf kubeconform.tar.gz -C /usr/local/bin kubeconform
+          kubeconform -v
+          echo "Installing kustomize..."
+          KUSTOMIZE_VERSION="5.5.0"
+          curl -sSLf -o kustomize.tar.gz "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"
+          sudo tar -xzf kustomize.tar.gz -C /usr/local/bin kustomize
+          kustomize version
+        displayName: Install kubeconform & kustomize
+
+      # Ensure namespace exists 
+      - bash: |
+          set -euo pipefail
+          kubectl get ns "$(namespace)" >/dev/null 2>&1 || kubectl create ns "$(namespace)"
+        displayName: Ensure namespace exists
+
+      # Helm lint 
+      - bash: |
+          set -euo pipefail
+          helm lint "$(chartPath)"
+        displayName: Helm lint
+
+      # Helm template -> kubeconform
+      - bash: |
+          set -euo pipefail
+          echo "Validating Helm template with kubeconform..."
+          helm template "$(releaseBase)" "$(chartPath)" \
+            -n "$(namespace)" \
+            --set hub='${{ parameters.imageHub }}',image='${{ parameters.imageName }}',tag='${{ parameters.imageTag }}',prod='$(prodValueBase)' \
+          | kubeconform -strict -ignore-missing-schemas -summary -
+        displayName: Helm template | kubeconform (base)
+
+      # Render Helm to gitops/base
+      - bash: |
+          set -euo pipefail
+          echo "Rendering Helm base manifests to gitops/base..."
+          rm -rf gitops/base/internal-service || true
+          helm template "$(releaseBase)" "$(chartPath)" \
+            -n "$(namespace)" \
+            --set hub='${{ parameters.imageHub }}',image='${{ parameters.imageName }}',tag='${{ parameters.imageTag }}',prod='$(prodValueBase)' \
+            --output-dir gitops/base
+        displayName: Helm render to gitops/base
+
+      # Kustomize build overlay -> kubeconform -> apply
+      - bash: |
+          set -euo pipefail
+          OVERLAY="gitops/overlays/${{ parameters.environment }}"
+          echo "Building overlay: ${OVERLAY}"
+          kustomize build "${OVERLAY}" | tee rendered.yaml \
+          | kubeconform -strict -ignore-missing-schemas -summary -
+          echo "Applying overlay to cluster..."
+          kubectl -n "$(namespace)" apply -f rendered.yaml
+        displayName: Kustomize build | kubeconform | apply
+
+      # Wait for rollout of the Deployment produced by overlay
+      - bash: |
+          set -euo pipefail
+          DEPLOY="$(serviceNameKustomize)"
+          echo "Waiting for rollout of Deployment/${DEPLOY} in $(namespace)..."
+          kubectl -n "$(namespace)" rollout status deploy/"${DEPLOY}" --timeout=180s
+        displayName: Wait for rollout
+
+      # Health checks and JSON validation
+      - bash: |
+          set -euo pipefail
+          NS="$(namespace)"
+          SVC="$(serviceNameKustomize)"
+          FQDN="${SVC}.${NS}.svc.cluster.local"
+          # Determine expected PROD from parameter (dev=false, prod=true)
+          if [ "${{ parameters.environment }}" = "prod" ]; then
+            EXPECT="true"
+          else
+            EXPECT="false"
+          fi
+
+          echo "Check /readyz..."
+          kubectl -n "$NS" run readyz --image=busybox:stable-musl --restart=Never --rm -i --quiet --command -- sh -c \
+            "wget -qO- http://${FQDN}:8080/readyz | grep -q '^ready$'"
+
+          echo "Check /healthz..."
+          kubectl -n "$NS" run healthz --image=busybox:stable-musl --restart=Never --rm -i --quiet --command -- sh -c \
+            "wget -qO- http://${FQDN}:8080/healthz | grep -q '^ok$'"
+
+          echo "Validate JSON includes PROD=${EXPECT}..."
+          kubectl -n "$NS" run envcheck --image=busybox:stable-musl --restart=Never --rm -i --quiet --command -- sh -c \
+            "wget -qO- http://${FQDN}:8080/ | tr -d '[:space:]' | grep -q '\"PROD\":\"'${EXPECT}'\"'"
+
+          echo "All checks passed."
+        displayName: Health checks and JSON validation

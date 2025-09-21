@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - internal-service/templates/deployment.yaml
+  - internal-service/templates/hpa.yaml
+  - internal-service/templates/networkpolicy.yaml
+  - internal-service/templates/service.yaml
+  - internal-service/templates/serviceaccount.yaml
