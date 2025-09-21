@@ -8,7 +8,7 @@
 docker build -t ghcr.io/alexanderakulshin/internal-service:0.1.0 .
 
 ## Run in kind
-<pre> ```kind create cluster --name isvc ``` </pre>
+```kind create cluster --name isvc ```
 kind load docker-image ghcr.io/alexanderakulshin/internal-service:0.1.0 --name isvc
 
 ## Install (dev)
