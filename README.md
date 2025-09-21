@@ -8,13 +8,13 @@
 docker build -t ghcr.io/alexanderakulshin/internal-service:0.1.0 .
 
 ## Run in kind
-kind create cluster --name isvc
+<pre> ```kind create cluster --name isvc ``` </pre>
 kind load docker-image ghcr.io/alexanderakulshin/internal-service:0.1.0 --name isvc
 
 ## Install (dev)
 helm upgrade --install isvc-dev charts/internal-service  `
   -n isvc-dev --create-namespace `
-  --set hub=ghcr.io/alexanderakulshin,image=internal-service,tag=0.1.0,prod=false
+  --set hub=ghcr.io/alexanderakulshin,image=internal-service,tag=0.1.0,prod=false"
 
 ## Install (prod)
 helm upgrade --install isvc-prod charts/internal-service `
