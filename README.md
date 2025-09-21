@@ -1,5 +1,13 @@
 # Internal Service (Helm + GitOps-friendly)
 
+## Usage Scenario
+
+1. **Build the Docker image** of the service and load it into the local kind cluster.  
+2. **Deploy the service** to Kubernetes using Helm (dev or prod environment).  
+3. **Access the service** via `kubectl port-forward` and check its endpoints (`/readyz`, `/healthz`, JSON env).  
+4. (Optional) **Enable autoscaling (HPA)** with metrics-server.  
+5. (Optional) **Simulate GitOps workflow**: render Helm → apply through Kustomize.  
+
 ## Build
 ```
 docker build -t ghcr.io/alexanderakulshin/internal-service:0.1.0 .
@@ -32,9 +40,22 @@ helm upgrade --install isvc-prod charts/internal-service `
 ```
 kubectl -n isvc-dev port-forward svc/isvc-dev-internal-service 8080:8080
 ```
+### Bash
 ```
 curl localhost:8080 | jq
 ```
+### PowerShell
+```
+Invoke-WebRequest http://127.0.0.1:8080/readyz
+```
+```
+Invoke-WebRequest http://127.0.0.1:8080/healthyz
+```
+```
+$EnvVars = Invoke-WebRequest http://127.0.0.1:8080
+$EnvVars.Content
+```
+
 
 ## HPA metrics
 ```
